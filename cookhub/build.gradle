@@ -1,7 +1,14 @@
+buildscript {
+	ext {
+		jooqVersion = '3.19.5'
+	}
+}
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'nu.studer.jooq' version '9.0'
 }
 
 group = 'com.cookhub'
@@ -24,20 +31,120 @@ repositories {
 	mavenCentral()
 }
 
+sourceSets {
+	main {
+		java {
+			srcDirs = ["src/main/java", "build/generated-src/jooq/main"]
+		}
+	}
+}
+
 dependencies {
-	//implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+	//implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.security:spring-security-crypto:6.1.3'
+	
+	//lombok정의 및 추가로 spring tool suite플러그인도 있음
 	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 	annotationProcessor 'org.projectlombok:lombok'
+	runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+	
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	
+	//jooq 의존성 추가
+	implementation "org.jooq:jooq:${jooqVersion}"
+	implementation ('org.springframework.boot:spring-boot-starter-jooq') {
+		exclude group: 'org.jooq:jooq'
+	}
+
+	jooqGenerator 'org.mariadb.jdbc:mariadb-java-client'
+	jooqGenerator "org.jooq:jooq:${jooqVersion}"
+	jooqGenerator "org.jooq:jooq-meta:${jooqVersion}"
+	jooqGenerator "org.jooq:jooq-codegen:${jooqVersion}" 
 	
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// jooq generationTool 정의에 필요한 DB정보 정의 (gradle.properties)
+String dbHost = findProperty("DB_HOST")
+String dbPort = findProperty("DB_PORT")
+String dbSchema = findProperty("DB_SCHEMA")
+String dbUser = findProperty("DB_USER")
+String dbPass = findProperty("DB_PASS")
+
+//jooq generationTool 정의
+jooq {
+	version = "${jooqVersion}"
+	configurations {
+		mjjoDB {
+		
+			generateSchemaSourceOnCompilation = true
+		
+			generationTool {
+				jdbc {
+					driver = 'org.mariadb.jdbc.Driver'
+					url = "jdbc:mariadb://${dbHost}:${dbPort}/${dbSchema}"
+					user = "${dbUser}"
+					password = "${dbPass}"
+				}
+
+				generator {
+					name = 'org.jooq.codegen.DefaultGenerator'
+
+					database {
+						name = 'org.jooq.meta.mariadb.MariaDBDatabase'
+
+						schemata {
+							schema {
+								inputSchema = "${dbSchema}"
+							}
+						}
+
+						forcedTypes {
+							forcedType {
+								name = 'BOOLEAN'
+								includeTypes = '(?i:(TINY|SMALL|MEDIUM|BIG)?INT(UNSIGNED)?\\(1\\))'
+							}
+						}
+					}
+
+					generate {
+					    // 기본
+					    daos = true
+					    pojos = true
+					    records = true
+					
+					    // 편의
+					    javaTimeTypes = true
+					    immutablePojos = true
+					    fluentSetters = true
+					
+					    // Spring 적용 시 꼭 있으면 좋은 옵션
+					    springAnnotations = true          // @Repository, @Autowired 자동 부착
+					    relations = true                  // fetchChild(), fetchParent() 자동 생성
+					    validationAnnotations = true      // @NotNull, @Size 등 붙여줌
+					
+					    // 기타
+					    generatedAnnotation = true        // 생성코드임을 표시
+					    deprecated = false                // deprecated 코드는 제외
+					}
+
+					target {
+						packageName = "com.cookhub.mjjo.jooq.generated"
+						directory   = 'build/generated-src/jooq/main'
+						clean       = true
+					}
+				}
+			}
+		}
+	}
 }
