@@ -1,11 +1,19 @@
 package com.cookhub.mjjo.dto.recipe;
 
-import jakarta.validation.constraints.*;
 import java.util.List;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public record RecipeUpdateRequest(
         @NotBlank String title,
-        String content,
+        @NotBlank String content,
         @NotNull Integer categoryNo,
-        @Size(min = 0) List<RecipeSaveRequest.IngredientDto> ingredients
-) {}
+        List<Ingredient> ingredients
+) {
+    // 중첩 타입 (record는 본질적으로 static 이라 사용에 용이)
+    public static record Ingredient(
+    		@NotBlank String name, 
+    		@NotBlank String amount
+    ) {}
+}
