@@ -6,8 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.cookhub.mjjo.dto.recipe.RecipeSaveRequest;
 
-import static com.cookhub.jooq.generated.tables.ChBoard.CH_BOARD;
-import static com.cookhub.jooq.generated.tables.ChIngredients.CH_INGREDIENTS;
+import static com.cookhub.mjjo.jooq.generated.tables.ChBoard.CH_BOARD;
+import static com.cookhub.mjjo.jooq.generated.tables.ChIngredients.CH_INGREDIENTS;
 
 import java.time.LocalDateTime;
 

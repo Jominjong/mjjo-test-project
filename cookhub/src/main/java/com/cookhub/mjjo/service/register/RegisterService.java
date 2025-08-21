@@ -2,37 +2,55 @@ package com.cookhub.mjjo.service.register;
 
 import com.cookhub.mjjo.dto.register.RegisterRequest;
 import com.cookhub.mjjo.dto.register.RegisterResponse;
-import com.cookhub.jooq.generated.tables.ChUsers;
-import com.cookhub.jooq.generated.tables.records.ChUsersRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; // optional, 암호화용
+
+import static com.cookhub.mjjo.jooq.generated.tables.ChUsers.CH_USERS;
 
 @Service
 @RequiredArgsConstructor
 public class RegisterService {
 
     private final DSLContext dsl;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
-    public RegisterResponse register(RegisterRequest request) {
-        ChUsersRecord record = dsl.newRecord(ChUsers.CH_USERS);
-        record.setUserEmail(request.getEmail());
-        record.setUserPw(passwordEncoder.encode(request.getPassword())); // optional
-        record.setUserName(request.getName());
-        record.store();
+    public RegisterResponse register(RegisterRequest req) {
+        boolean exists = dsl.fetchExists(
+                dsl.selectFrom(CH_USERS).where(CH_USERS.USER_EMAIL.eq(req.getEmail()))
+        );
+        if (exists) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
 
-        return new RegisterResponse(record.getUserNo(), record.getUserEmail(), record.getUserName());
+        var rec = dsl.insertInto(CH_USERS)
+                .set(CH_USERS.USER_EMAIL, req.getEmail())
+                .set(CH_USERS.USER_PW, encoder.encode(req.getPassword()))
+                .set(CH_USERS.USER_NAME, req.getName())
+                .returning(CH_USERS.USER_NO, CH_USERS.USER_EMAIL, CH_USERS.USER_NAME)
+                .fetchOne();
+
+        return new RegisterResponse(
+                rec.get(CH_USERS.USER_NO),
+                rec.get(CH_USERS.USER_EMAIL),
+                rec.get(CH_USERS.USER_NAME)
+        );
     }
 
     public RegisterResponse getUserById(Integer userNo) {
-        ChUsersRecord record = dsl.selectFrom(ChUsers.CH_USERS)
-                                   .where(ChUsers.CH_USERS.USER_NO.eq(userNo))
-                                   .fetchOne();
+        var rec = dsl.selectFrom(CH_USERS)
+                .where(CH_USERS.USER_NO.eq(userNo))
+                .fetchOne();
 
-        if (record == null) return null;
+        if (rec == null) {
+            throw new IllegalArgumentException("존재하지 않는 사용자입니다.");
+        }
 
-        return new RegisterResponse(record.getUserNo(), record.getUserEmail(), record.getUserName());
+        return new RegisterResponse(
+                rec.get(CH_USERS.USER_NO),
+                rec.get(CH_USERS.USER_EMAIL),
+                rec.get(CH_USERS.USER_NAME)
+        );
     }
 }
