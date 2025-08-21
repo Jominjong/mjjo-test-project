@@ -6,7 +6,7 @@ import org.jooq.Record;
 import org.springframework.stereotype.Service;
 import com.cookhub.mjjo.dto.main.MainResponse;
 
-import static com.cookhub.jooq.generated.tables.ChBoard.CH_BOARD;
+import static com.cookhub.mjjo.jooq.generated.tables.ChBoard.CH_BOARD;
 
 import java.util.List;
 
