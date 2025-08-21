@@ -10,11 +10,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/recipes")
 public class RecipeDeleteController {
 
-    private final RecipeDeleteService recipeDeleteService;
+ private final RecipeDeleteService recipeDeleteService;
 
-    @DeleteMapping("/{boardNo}")
-    public ResponseEntity<Void> delete(@PathVariable Integer boardNo) {
-        recipeDeleteService.delete(boardNo);
-        return ResponseEntity.noContent().build();
-    }
+ @DeleteMapping("/{boardNo}")
+ public ResponseEntity<Void> delete(@PathVariable("boardNo") Integer boardNo) {
+     recipeDeleteService.delete(boardNo);
+     return ResponseEntity.noContent().build();
+ }
 }
+
