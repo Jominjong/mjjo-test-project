@@ -1,4 +1,3 @@
-// src/main/java/com/cookhub/mjjo/security/JwtAuthenticationFilter.java
 package com.cookhub.mjjo.security;
 
 import com.cookhub.mjjo.util.JwtUtil;
@@ -23,7 +22,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwt;
 
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest req, @NonNull HttpServletResponse res,
+    protected void doFilterInternal(@NonNull HttpServletRequest req, 
+    								@NonNull HttpServletResponse res,
                                     @NonNull FilterChain chain) throws ServletException, IOException {
         String auth = req.getHeader(HttpHeaders.AUTHORIZATION);
         if (auth != null && auth.startsWith("Bearer ")) {
@@ -32,11 +32,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (!"access".equals(d.getClaim("type").asString())) {
                     throw new IllegalStateException("Access 토큰이 아닙니다.");
                 }
-                String email = d.getClaim("email").asString();
+                
+                Integer userNo   = d.getClaim("userNo").asInt();
+                String  email    = d.getClaim("email").asString();
                 List<String> roles = d.getClaim("roles").asList(String.class);
-                var authToken = new UsernamePasswordAuthenticationToken(
-                        email, null,
-                        roles == null ? List.of() : roles.stream().map(SimpleGrantedAuthority::new).toList());
+
+                var authorities = (roles == null ? List.<String>of() : roles).stream()
+                        .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+                        .map(SimpleGrantedAuthority::new)
+                        .toList();
+
+                var principal = new AuthUser(userNo, email, roles == null ? List.of() : roles);
+                var authToken = new UsernamePasswordAuthenticationToken(principal, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             } catch (Exception ignored) {
                 SecurityContextHolder.clearContext();

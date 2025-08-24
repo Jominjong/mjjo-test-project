@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/login")
 @RequiredArgsConstructor
-public class LoginController {
+public class LoginControllerLegacy {
 
     private final LoginService loginService;
     private final JwtUtil jwtUtil;

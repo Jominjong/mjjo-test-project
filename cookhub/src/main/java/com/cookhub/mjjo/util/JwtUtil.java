@@ -5,6 +5,7 @@ import com.auth0.jwt.algorithms.Algorithm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -20,7 +21,7 @@ public class JwtUtil {
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.issuer:cookhub}") String issuer,
-            @Value("${jwt.access-exp-minutes:15}") long accessExpMinutes
+            @Value("${jwt.access-exp-minutes:30}") long accessExpMinutes
     ) {
         this.algorithm = Algorithm.HMAC256(secret);
         this.issuer = issuer;
@@ -44,4 +45,17 @@ public class JwtUtil {
     public com.auth0.jwt.interfaces.DecodedJWT verify(String token) {
         return JWT.require(algorithm).withIssuer(issuer).build().verify(token);
     }
+    
+ // JwtUtil.java 내부 예시
+    public String createToken(String type, String email, Duration ttl) {
+        Instant now = Instant.now();
+        return JWT.create()
+        	.withIssuer(issuer)
+        	.withIssuedAt(Date.from(now))
+            .withExpiresAt(Date.from(now.plus(ttl)))
+            .withClaim("type", type)   // "pwd_reset" 등
+            .withClaim("email", email)
+            .sign(algorithm);   // 기존 서명 알고리즘/시크릿 재사용
+    }
+
 }

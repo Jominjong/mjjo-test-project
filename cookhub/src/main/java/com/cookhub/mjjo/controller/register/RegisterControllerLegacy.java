@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/register")
 @RequiredArgsConstructor
-public class RegisterController {
+public class RegisterControllerLegacy {
 
     private final RegisterService registerService;
 
@@ -23,7 +23,7 @@ public class RegisterController {
 
     @Operation(summary = "회원 조회")
     @GetMapping("/{userNo}")
-    public ResponseEntity<RegisterResponse> getUser(@PathVariable Integer userNo) {
+    public ResponseEntity<RegisterResponse> getUser(@PathVariable(name = "userNo", required = true) Integer userNo) {
         return ResponseEntity.ok(registerService.getUserById(userNo));
     }
 }
