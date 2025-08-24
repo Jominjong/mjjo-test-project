@@ -1,4 +1,4 @@
-package com.cookhub.mjjo.dto.register;
+package com.cookhub.mjjo.dto.auth;
 
 import jakarta.validation.constraints.Email;
 import lombok.Getter;

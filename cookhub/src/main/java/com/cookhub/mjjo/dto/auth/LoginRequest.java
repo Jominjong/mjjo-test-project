@@ -1,4 +1,4 @@
-package com.cookhub.mjjo.dto.login;
+package com.cookhub.mjjo.dto.auth;
 
 import lombok.Getter;
 import lombok.Setter;

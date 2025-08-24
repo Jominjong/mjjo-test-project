@@ -47,6 +47,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 //	implementation 'org.springframework.security:spring-security-crypto:6.3.3'
 	implementation 'com.auth0:java-jwt:4.4.0'
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	
 	//lombok정의 및 추가로 spring tool suite플러그인도 있음
 	compileOnly 'org.projectlombok:lombok'
