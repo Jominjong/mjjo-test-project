@@ -50,7 +50,7 @@ public class SecurityConfig {
 
         return http
             //API와 에러만 이 체인이 처리
-            .securityMatcher("/api/**", "/error")
+            .securityMatcher("/recipes", "/recipes/**", "/auth/**", "/error")
             .csrf(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -71,13 +71,17 @@ public class SecurityConfig {
                 		"/api/auth/refresh", "/api/password/**",
                 		
                 		//final
-                		"/auth/login", "/auth/refresh", "/auth/logout",
+                		"/auth/login", "/auth/refresh",
                 		"/auth/register", "/auth/password/**"
                 ).permitAll()
 
                 //그 외는 인증 필요
                 .requestMatchers(
-                		"/api/recipes/**"
+                		//legacy
+                		"/api/recipes/**",
+                		
+                		//new
+                		"/recipes/**", "/recipes"
                 ).authenticated()
                 
                 .anyRequest().authenticated()

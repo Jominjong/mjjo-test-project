@@ -1,4 +1,4 @@
-package com.cookhub.mjjo.dto.password;
+package com.cookhub.mjjo.dto.auth;
 
 public record VerifyCodeResponse(
     String resetToken,

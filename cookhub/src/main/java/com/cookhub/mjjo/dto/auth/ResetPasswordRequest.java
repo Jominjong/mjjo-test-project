@@ -1,4 +1,4 @@
-package com.cookhub.mjjo.dto.password;
+package com.cookhub.mjjo.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

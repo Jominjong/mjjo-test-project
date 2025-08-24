@@ -1,4 +1,4 @@
-package com.cookhub.mjjo.dto.main;
+package com.cookhub.mjjo.dto.recipe;
 
 import java.time.LocalDateTime;
 import java.util.List;
