@@ -17,7 +17,7 @@ import static com.cookhub.mjjo.jooq.generated.tables.ChUsers.CH_USERS;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
-public class AuthController {
+public class AuthControllerLegacy {
 
     private final RefreshTokenService rtService;
     private final JwtUtil jwt;
