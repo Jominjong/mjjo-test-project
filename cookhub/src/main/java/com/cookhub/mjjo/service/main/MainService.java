@@ -16,7 +16,7 @@ public class MainService {
 
     private final DSLContext dsl;
 
-    public MainResponse list(int page, int size, Integer categoryNo, String keyword) {
+    public MainResponse list(int page, int size, Integer categoryNo, String keyword, Integer userNo) {
         int pageSafe = Math.max(page, 1);
         int sizeSafe = Math.min(Math.max(size, 1), 100);
         int offset = (pageSafe - 1) * sizeSafe;
@@ -29,6 +29,8 @@ public class MainService {
             var like = "%" + keyword.trim() + "%";
             cond = cond.and(CH_BOARD.BOARD_TITLE.likeIgnoreCase(like));
         }
+        
+        cond = cond.and(CH_BOARD.USER_NO.eq(userNo));
 
         long total = dsl.selectCount()
                 .from(CH_BOARD)
