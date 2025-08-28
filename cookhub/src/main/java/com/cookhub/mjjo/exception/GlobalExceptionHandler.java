@@ -10,9 +10,10 @@ import org.springframework.web.bind.annotation.*;
 import java.nio.file.AccessDeniedException;
 import java.util.NoSuchElementException;
 
+/* 컨트롤러/서비스 레이어에서 던진 예외를 잡아 4번 ErrorResponse 포맷으로 응답 */
 @RestControllerAdvice(basePackages = "com.cookhub.mjjo.controller")
 public class GlobalExceptionHandler {
-
+		
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(
             IllegalArgumentException ex, HttpServletRequest req) {
@@ -34,7 +35,7 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(403, "Forbidden", ex.getMessage(), req.getRequestURI()));
     }
 
-    // 인증 실패가 있다면 401로 매핑 (Security 미사용이면 상황에 따라 직접 던지세요)
+    // 인증 실패가 있다면 401로 매핑
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorized(
             Exception ex, HttpServletRequest req) {

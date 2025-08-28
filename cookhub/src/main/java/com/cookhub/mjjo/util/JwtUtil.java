@@ -53,9 +53,9 @@ public class JwtUtil {
         	.withIssuer(issuer)
         	.withIssuedAt(Date.from(now))
             .withExpiresAt(Date.from(now.plus(ttl)))
-            .withClaim("type", type)   // "pwd_reset" 등
+            .withClaim("type", type)
             .withClaim("email", email)
-            .sign(algorithm);   // 기존 서명 알고리즘/시크릿 재사용
+            .sign(algorithm);
     }
 
 }

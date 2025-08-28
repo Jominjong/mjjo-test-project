@@ -6,11 +6,14 @@ import com.cookhub.mjjo.service.AuthService;
 
 import com.cookhub.mjjo.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -35,15 +38,13 @@ public class AuthController {
     public ResponseEntity<TokenPairResponse> refresh(@RequestBody RefreshRequest req) {
     	//입력 검증
         if (req == null || req.getRefreshToken() == null || req.getRefreshToken().isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_REQUEST, "리프레쉬 토큰이 없습니다.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "리프레쉬 토큰이 없습니다.");
         }
     	
         //토큰 유효 검증
         Integer userNo = authService.getUserNoIfValid(req.getRefreshToken());
         if (userNo == null) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
         }
         
         //이전 리프레쉬 토큰 즉시 만료(회전)
@@ -54,8 +55,7 @@ public class AuthController {
                 .fetchOne();
         
         if (user == null) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다.");
         }
 
         var roles = List.of("ROLE_USER");
@@ -86,22 +86,42 @@ public class AuthController {
     public ResponseEntity<?> me(@RequestHeader(value = "Authorization", required = false) String authorization) {
     	try {
             if (authorization == null || !authorization.startsWith("Bearer ")) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Missing Bearer token");
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing Bearer token");
             }
             var decoded = jwt.verify(authorization.substring(7));
             return ResponseEntity.ok(decoded.getClaims()); // userNo/email/name/roles 등
         } catch (Exception e) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid token");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
     }
-    
-    @Operation(summary = "[permit]회원가입")
-    @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(@RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authService.register(request));
+
+    @Operation(summary = "[permit] 이메일 중복검사 (중복이 아닐 시 인증코드 발송)")
+    @PostMapping("/register/check")
+    public ResponseEntity<EmailCheckResponse> checkEmail(@Valid @RequestBody EmailCheckRequest request) {
+        return ResponseEntity.ok(authService.checkEmailAndSendCode(request.email()));
     }
+
+    @Operation(summary = "[permit] 회원가입 인증코드 검증 (성공 시 signupToken 발급)")
+    @PostMapping("/register/verify")
+    public ResponseEntity<VerifyCodeResponse> verifySignup(@Valid @RequestBody VerifyCodeRequest request) {
+        return ResponseEntity.ok(authService.verifySignupCode(request.email(), request.code()));
+    }
+
+    @Operation(summary = "[permit] 회원가입 완료")
+    @PostMapping("/register")
+    public ResponseEntity<RegisterResponse> register(
+        @Parameter(description = "verify 단계에서 발급된 회원가입 토큰")
+        @RequestHeader("X-Signup-Token") String signupToken,
+        @Valid @RequestBody RegisterRequest request
+    ) {
+        return ResponseEntity.ok(authService.register(signupToken, request));
+    }
+    
+//    @Operation(summary = "[permit]회원가입 완료")
+//    @PostMapping("/register")
+//    public ResponseEntity<RegisterResponse> register(@RequestBody RegisterRequest request) {
+//        return ResponseEntity.ok(authService.register(request));
+//    }
 
     @Operation(summary = "회원 조회")
     @GetMapping("/register/{userNo}")
