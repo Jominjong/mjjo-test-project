@@ -1,0 +1,45 @@
+# ===============================
+# Redis
+# ===============================
+spring.application.name=
+spring.data.redis.host=localhost
+spring.data.redis.port=
+spring.data.redis.password=
+spring.data.redis.timeout=
+
+# ===============================
+# MariaDB
+# ===============================
+spring.datasource.url=jdbc:mariadb://localhost:
+spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
+spring.datasource.username=
+spring.datasource.password=
+
+# ===============================
+# JOOQ
+# ===============================
+spring.jooq.sql-dialect=MARIADB
+
+# ===============================
+# JWT
+# ===============================
+jwt.issuer=
+jwt.secret=
+
+jwt.access.secret=
+jwt.refresh.secret=
+jwt.reset.secret=
+
+jwt.access.exp-min=
+jwt.refresh.exp-days=
+jwt.reset.exp-min=
+
+# ===============================
+# mail
+# ===============================
+spring.mail.host=
+spring.mail.port=
+spring.mail.username=
+spring.mail.password=
+spring.mail.properties.mail.smtp.auth=
+spring.mail.properties.mail.smtp.starttls.enable=
