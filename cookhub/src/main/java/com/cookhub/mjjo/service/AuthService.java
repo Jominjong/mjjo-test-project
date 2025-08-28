@@ -7,17 +7,18 @@ import jakarta.mail.MessagingException;
 
 import com.cookhub.mjjo.dto.auth.*;
 
+import com.cookhub.mjjo.util.*;
 import java.util.List;
 import java.time.Duration;
 import org.jooq.DSLContext;
 import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import lombok.RequiredArgsConstructor;
-//import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatus;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
-//import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,6 +44,12 @@ public class AuthService {
     
     private static final Duration CODE_TTL   = Duration.ofMinutes(10);
     private static final Duration RESET_TTL  = Duration.ofMinutes(10);
+    private static final Duration SIGNUP_TTL  = Duration.ofMinutes(10);
+    private static final Duration SIGNUP_CODE_TTL     = Duration.ofMinutes(10);
+    private static final Duration SIGNUP_COOLDOWN_TTL = Duration.ofSeconds(60);
+    
+    private static final String TYPE_SIGNUP  = "signup";     // 회원가입 검증용
+    private static final String TYPE_PWD_RESET = "pwd_reset"; // 비번 재설정용 (기존)
 
     private String codeKey(String email) {
         return "pwd:code:" + email.toLowerCase();
@@ -52,6 +59,16 @@ public class AuthService {
         return email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
     
+    private String signupCodeKey(String email) { 
+    	return "reg:code:" + email.toLowerCase(); 
+    }
+    
+	private String signupCooldownKey(String email) { return "reg:cooldown:" + email.toLowerCase(); }
+	
+	private boolean isValidEmailSyntax(String email) {
+	    return email != null && email.contains("@") && email.contains(".");
+	}
+
 /*--------------------------------------------------------------------------------------------*/
 /*login*/
 /*--------------------------------------------------------------------------------------------*/
@@ -66,8 +83,7 @@ public class AuthService {
                 .fetchOne();
 
         if (rec == null || !encoder.matches(req.getPassword(), rec.getUserPw())) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
         
         var roles = List.of("ROLE_USER");
@@ -77,10 +93,10 @@ public class AuthService {
         return new LoginResponse(access, refresh, rec.getUserNo(), rec.getUserEmail(), rec.getUserName());
     }
     
-    /** 새 RT 저장 (raw는 반환용, DB에는 해시 저장) */
+    /* 새 RT 저장 (raw는 반환용, DB에는 해시 저장) */
     public String issue(Integer userNo) {
-        String raw = com.cookhub.mjjo.util.TokenHash.newRawToken();
-        String hash = com.cookhub.mjjo.util.TokenHash.sha256(raw);
+        String raw = TokenHash.newRawToken();
+        String hash = TokenHash.sha256(raw);
 
         dsl.insertInto(CH_REFRESH_TOKEN)
            .set(CH_REFRESH_TOKEN.USER_NO, userNo)
@@ -92,7 +108,7 @@ public class AuthService {
     }
 
     public Integer getUserNoIfValid(String raw) {
-        String hash = com.cookhub.mjjo.util.TokenHash.sha256(raw);
+        String hash = TokenHash.sha256(raw);
         var rec = dsl.selectFrom(CH_REFRESH_TOKEN)
                 .where(CH_REFRESH_TOKEN.REFRESH_TOKEN.eq(hash))
                 .and(CH_REFRESH_TOKEN.EXPIRED_AT.isNull().or(CH_REFRESH_TOKEN.EXPIRED_AT.gt(LocalDateTime.now())))
@@ -100,9 +116,9 @@ public class AuthService {
         return rec == null ? null : rec.getUserNo();
     }
 
-    /** 사용된 RT 즉시 만료(회전 전용) */
+    /* 사용된 RT 즉시 만료(회전 전용) */
     public void expire(String raw) {
-        String hash = com.cookhub.mjjo.util.TokenHash.sha256(raw);
+        String hash = TokenHash.sha256(raw);
         dsl.update(CH_REFRESH_TOKEN)
            .set(CH_REFRESH_TOKEN.EXPIRED_AT, LocalDateTime.now())
            .where(CH_REFRESH_TOKEN.REFRESH_TOKEN.eq(hash))
@@ -110,7 +126,7 @@ public class AuthService {
            .execute();
     }
 
-    /** 해당 유저의 모든 유효 RT 만료(로그아웃-올) */
+    /* 해당 유저의 모든 유효 RT 만료(로그아웃-올) */
     public void expireAllByUser(Integer userNo) {
         dsl.update(CH_REFRESH_TOKEN)
            .set(CH_REFRESH_TOKEN.EXPIRED_AT, LocalDateTime.now())
@@ -122,18 +138,115 @@ public class AuthService {
 /*--------------------------------------------------------------------------------------------*/
 /*register*/
 /*--------------------------------------------------------------------------------------------*/    
-    @Transactional
-    public RegisterResponse register(RegisterRequest req) {
-    	
-    	final String email = normalize(req.getEmail());
-    	
-        boolean exists = dsl.fetchExists(
-                dsl.selectFrom(CH_USERS).where(CH_USERS.USER_EMAIL.eq(req.getEmail()))
-        );
+    
+    @Transactional(readOnly = true)
+    public EmailCheckResponse checkEmailAndSendCode(String rawEmail) {
+        final String email = normalize(rawEmail);
 
-        if (exists) {
-        	throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST, "이미 사용 중인 이메일입니다.");
+        if (!isValidEmailSyntax(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 이메일입니다.");
+        }
+
+        boolean available = isEmailAvailable(email);
+        if (!available) {
+            // 이미 사용 중 → 코드 발송 안 함
+            return new EmailCheckResponse(email, false, false, 0, 0);
+        }
+
+        // 과도한 발송 방지(쿨다운)
+        String cdKey = signupCooldownKey(email);
+        Long remain = redis.getExpire(cdKey, java.util.concurrent.TimeUnit.SECONDS);
+        if (remain != null && remain > 0) {
+            return new EmailCheckResponse(email, true, false, 0, remain);
+        }
+
+        // 코드 생성/저장
+        String code = generate6DigitCode();
+        redis.opsForValue().set(signupCodeKey(email), code, SIGNUP_CODE_TTL);
+        redis.opsForValue().set(cdKey, "1", SIGNUP_COOLDOWN_TTL);
+
+        // 메일 발송
+        String subject = "[CookHub] 회원가입 인증코드";
+        String html = """
+            <div style="font-family:system-ui,Arial,sans-serif;line-height:1.6">
+              <h2>회원가입 인증코드</h2>
+              <p>아래 6자리 코드를 입력해 주세요.</p>
+              <div style="font-size:24px;font-weight:700;letter-spacing:4px;
+                   padding:12px 16px;border:1px solid #ddd;display:inline-block">%s</div>
+              <p style="color:#666">유효시간: %d분</p>
+            </div>
+        """.formatted(code, SIGNUP_CODE_TTL.toMinutes());
+
+        try {
+            emailUtil.sendEmail(email, subject, html);
+        } catch (MessagingException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "이메일 발송에 실패했습니다.");
+        }
+
+        return new EmailCheckResponse(email, true, true, SIGNUP_CODE_TTL.toSeconds(), SIGNUP_COOLDOWN_TTL.toSeconds());
+    }
+    
+    @Transactional(readOnly = true)
+    public VerifyCodeResponse verifySignupCode(String rawEmail, String code) {
+        final String email = normalize(rawEmail);
+
+        // 이미 사용 중이면 중단
+        if (!isEmailAvailable(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미 사용 중인 이메일입니다.");
+        }
+
+        String key  = signupCodeKey(email);
+        String real = redis.opsForValue().get(key);
+
+        if (real == null || !real.equals(code)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "인증코드가 유효하지 않거나 만료되었습니다.");
+        }
+
+        redis.delete(key);
+
+        String signupToken = jwt.createToken(TYPE_SIGNUP, email, SIGNUP_TTL);
+        return new VerifyCodeResponse(signupToken, SIGNUP_TTL.toSeconds());
+    }
+
+    //이메일 중복검사
+    @Transactional(readOnly = true)    
+    public boolean isEmailAvailable(String rawEmail) {
+        final String email = normalize(rawEmail);
+        return !dsl.fetchExists(
+                dsl.selectOne()
+                   .from(CH_USERS)
+                   .where(CH_USERS.USER_EMAIL.eq(email))
+        );
+    }
+    
+ // Service
+    @Transactional
+    public RegisterResponse register(String signupToken, RegisterRequest req) {
+        final String email = normalize(req.getEmail());
+
+        // 이미 사용 중이면 가입 불가
+        if (!isEmailAvailable(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미 사용 중인 이메일입니다.");
+        }
+
+        final DecodedJWT d;
+        try {
+            d = jwt.verify(signupToken);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "가입 토큰이 유효하지 않거나 만료되었습니다.");
+        }
+
+        final String typeClaim  = normalize(d.getClaim("type").asString());
+        if (typeClaim.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token payload: type missing");
+        }
+        final String emailClaim = normalize(d.getClaim("email").asString());
+        if (emailClaim.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token payload: email missing");
+        }
+
+        if (!TYPE_SIGNUP.equals(typeClaim) || !email.equals(emailClaim)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "가입 토큰이 유효하지 않습니다.");
         }
 
         var rec = dsl.insertInto(CH_USERS)
@@ -149,6 +262,7 @@ public class AuthService {
                 rec.get(CH_USERS.USER_NAME)
         );
     }
+
 
     public RegisterResponse getUserById(Integer userNo) {
         var rec = dsl.selectFrom(CH_USERS)
@@ -187,7 +301,7 @@ public class AuthService {
             // 존재할 때만 저장 — 혹은 항상 저장해도 무방
         	redis.opsForValue().set(codeKey(email), code, CODE_TTL);
 
-            // ✅ 제목/본문을 “비밀번호 재설정”으로 명확히
+            // 제목/본문을 “비밀번호 재설정”으로 명확히
             String subject = "[CookHub] 비밀번호 재설정 인증코드";
             String html = """
                 <div style="font-family:system-ui,Arial,sans-serif;line-height:1.6">
@@ -204,8 +318,7 @@ public class AuthService {
                 log.debug("인증 코드 이메일 발송 완료 - email: {}", email);
             } catch (MessagingException e) {
                 log.error("인증 코드 이메일 발송 실패 - email: {}, error: {}", email, e.getMessage());
-                throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "이메일 발송에 실패했습니다.");
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "이메일 발송에 실패했습니다.");
             }
 
             // (선택) 개발 환경에서만 로그로 코드 보여주기
@@ -224,15 +337,13 @@ public class AuthService {
         String real = redis.opsForValue().get(key);
         if (real == null || !real.equals(code)) {
         	//400으로 명확히
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_REQUEST, "인증코드가 유효하지 않거나 만료되었습니다.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "인증코드가 유효하지 않거나 만료되었습니다.");
         }
         // 일회성 사용: 코드 제거
         redis.delete(key);
 
         // 비밀번호 리셋 전용 토큰(JWT) 발급 (Authorization 헤더로 쓰지 않고 바디로만 사용)
-        // claim: type=pwd_reset, email=...
-        String resetToken = jwt.createToken("pwd_reset", email, RESET_TTL);
+        String resetToken = jwt.createToken(TYPE_PWD_RESET, email, RESET_TTL);
         return new VerifyCodeResponse(resetToken, RESET_TTL.toSeconds());
     }
 
@@ -248,13 +359,11 @@ public class AuthService {
     public void reset(String resetToken, String newPassword) {
         // 1) 입력값 검증 (400)
         if (resetToken == null || resetToken.isBlank()) {
-        	 throw new org.springframework.web.server.ResponseStatusException(
-        	            org.springframework.http.HttpStatus.BAD_REQUEST, "resetToken is required");
+        	 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "resetToken is required");
         }
         
         if (newPassword == null || newPassword.isBlank() || newPassword.length() < 4) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_REQUEST, "newPassword must be at least 4 characters");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "newPassword must be at least 4 characters");
         }
 
         // 2) 토큰 검증 (유효기간/서명 검증 실패 시 400)
@@ -262,21 +371,18 @@ public class AuthService {
         try {
             d = jwt.verify(resetToken);
         } catch (Exception e) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid or expired reset token");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired reset token");
         }
 
         // 3) 리셋 전용 토큰 타입인지 확인
-        if (!"pwd_reset".equals(d.getClaim("type").asString())) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST, "Not a password-reset token");
+        if (!TYPE_PWD_RESET.equals(d.getClaim("type").asString())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not a password-reset token");
         }
 
         // 4) 이메일 추출
         final String email = normalize(d.getClaim("email").asString());
         if (email.isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid token payload: email missing");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token payload: email missing");
         }
 
         // 5) 비밀번호 해시 후 변경
@@ -290,8 +396,7 @@ public class AuthService {
                 .execute();
 
         if (updated == 0) {
-        	throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.NOT_FOUND, "User not found");
+        	throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
 
         // 6) 모든 Refresh Token 폐기

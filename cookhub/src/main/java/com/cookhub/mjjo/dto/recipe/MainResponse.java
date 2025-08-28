@@ -5,7 +5,7 @@ import java.util.List;
 
 public record MainResponse(
         List<Item> items,
-        int page,     // 1-base
+        int page,
         int size,
         long total,
         int totalPages,

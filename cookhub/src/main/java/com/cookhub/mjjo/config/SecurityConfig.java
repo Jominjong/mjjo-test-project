@@ -72,7 +72,8 @@ public class SecurityConfig {
                 		
                 		//final
                 		"/auth/login", "/auth/refresh",
-                		"/auth/register", "/auth/password/**"
+                		"/auth/register", "/auth/password/**",
+                		"/auth/register/check", "/auth/register/verify"
                 ).permitAll()
 
                 //그 외는 인증 필요
