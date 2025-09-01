@@ -15,7 +15,6 @@ import static com.cookhub.mjjo.jooq.generated.tables.ChBoard.CH_BOARD;
 import static com.cookhub.mjjo.jooq.generated.tables.ChIngredients.CH_INGREDIENTS;
 
 
-
 @Service
 @RequiredArgsConstructor
 public class RecipeService {
@@ -93,7 +92,7 @@ public class RecipeService {
                 )
                 .from(CH_BOARD)
                 .where(CH_BOARD.BOARD_NO.eq(boardNo))
-                .and(CH_BOARD.USER_NO.eq(userNo))   // 👈 소유자만
+                .and(CH_BOARD.USER_NO.eq(userNo))
                 // .and(CH_BOARD.DELETED_AT.isNull())
                 .fetchOne();
 
@@ -163,7 +162,7 @@ public class RecipeService {
 /*update*/
 /*--------------------------------------------------------------------------------------------*/
     @Transactional      
-    public void update(Integer userNo, Integer boardNo, RecipeUpdateRequest req) { // 👈 userNo 추가
+    public void update(Integer userNo, Integer boardNo, RecipeUpdateRequest req) {
     	/*1) 게시글 업데이트*/
     	int updated = dsl.update(CH_BOARD)
                 .set(CH_BOARD.BOARD_TITLE, req.title())
@@ -171,7 +170,7 @@ public class RecipeService {
                 .set(CH_BOARD.CG_NO, req.categoryNo())
                 .set(CH_BOARD.UPDATED_AT, LocalDateTime.now())
                 .where(CH_BOARD.BOARD_NO.eq(boardNo))
-                .and(CH_BOARD.USER_NO.eq(userNo))             // 👈 소유자만 수정
+                .and(CH_BOARD.USER_NO.eq(userNo))
                 .execute();
         
         /*존재하지 않는 게시글*/
@@ -232,3 +231,4 @@ public class RecipeService {
         //    .execute();
    }
 }
+

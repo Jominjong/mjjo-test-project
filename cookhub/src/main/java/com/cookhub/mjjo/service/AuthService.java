@@ -49,7 +49,7 @@ public class AuthService {
     private static final Duration SIGNUP_COOLDOWN_TTL = Duration.ofSeconds(60);
     
     private static final String TYPE_SIGNUP  = "signup";     // 회원가입 검증용
-    private static final String TYPE_PWD_RESET = "pwd_reset"; // 비번 재설정용 (기존)
+    private static final String TYPE_PWD_RESET = "pwd_reset"; // 비번 재설정용
 
     private String codeKey(String email) {
         return "pwd:code:" + email.toLowerCase();
@@ -90,7 +90,7 @@ public class AuthService {
         String access = jwt.issueAccess(rec.getUserNo(), rec.getUserEmail(), rec.getUserName(), roles);
         String refresh = issue(rec.getUserNo());
 
-        return new LoginResponse(access, refresh, rec.getUserNo(), rec.getUserEmail(), rec.getUserName());
+        return new LoginResponse(access, refresh, rec.getUserName(), rec.getUserNo());
     }
     
     /* 새 RT 저장 (raw는 반환용, DB에는 해시 저장) */
@@ -149,7 +149,7 @@ public class AuthService {
 
         boolean available = isEmailAvailable(email);
         if (!available) {
-            // 이미 사용 중 → 코드 발송 안 함
+            // 이미 사용 중 -> 코드 발송 안 함
             return new EmailCheckResponse(email, false, false, 0, 0);
         }
 
@@ -219,7 +219,6 @@ public class AuthService {
         );
     }
     
- // Service
     @Transactional
     public RegisterResponse register(String signupToken, RegisterRequest req) {
         final String email = normalize(req.getEmail());
@@ -301,7 +300,7 @@ public class AuthService {
             // 존재할 때만 저장 — 혹은 항상 저장해도 무방
         	redis.opsForValue().set(codeKey(email), code, CODE_TTL);
 
-            // 제목/본문을 “비밀번호 재설정”으로 명확히
+            // 제목/본문을 "비밀밀번호 재설정"으로 명확히
             String subject = "[CookHub] 비밀번호 재설정 인증코드";
             String html = """
                 <div style="font-family:system-ui,Arial,sans-serif;line-height:1.6">
@@ -314,18 +313,18 @@ public class AuthService {
             .formatted(code, CODE_TTL.toMinutes());
 
             try {
-                emailUtil.sendEmail(email, subject, html);  // ✅ 존재할 때만 발송
+                emailUtil.sendEmail(email, subject, html);  // 존재할 때만 발송
                 log.debug("인증 코드 이메일 발송 완료 - email: {}", email);
             } catch (MessagingException e) {
                 log.error("인증 코드 이메일 발송 실패 - email: {}, error: {}", email, e.getMessage());
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "이메일 발송에 실패했습니다.");
             }
 
-            // (선택) 개발 환경에서만 로그로 코드 보여주기
+            // 개발 환경에서만 로그로 코드 보여주기
             // if (isDevProfile) log.info("[DEV] {} => code={}", email, code);
         }
         
-        // 실제로는 이메일 발송 필요. 지금은 개발 편의로 로그 출력.
+        // 개발 환경에서만 로그로 코드 보여주기2
         //System.out.println("[PasswordFind] email=" + email + ", code=" + code + " (TTL " + CODE_TTL.toMinutes() + "m)");
     }
 
@@ -389,8 +388,6 @@ public class AuthService {
         String hashed = encoder.encode(newPassword);
         int updated = dsl.update(CH_USERS)
                 .set(CH_USERS.USER_PW, hashed)
-                // ⚠️ jOOQ 생성된 컬럼명이 실제 스키마와 일치해야 합니다.
-                // 만약 컬럼이 DELDTE_AT 로 생성되어 있다면 DELETED_AT 대신 그 컬럼을 사용하세요.
                 .where(CH_USERS.USER_EMAIL.eq(email))
                 .and(CH_USERS.DELETED_AT.isNull())
                 .execute();

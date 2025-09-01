@@ -94,6 +94,29 @@ public class SecurityConfig {
             .build();
     }
     
+
+   // CORS 정의
+   @Bean
+   public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+       var config = new org.springframework.web.cors.CorsConfiguration();
+       // 프론트 개발 서버(Vite)
+       config.setAllowedOrigins(java.util.List.of("http://localhost:5173"));
+       // 배포 도메인도 있다면 나중에 여기에 추가
+       // config.setAllowedOrigins(List.of("http://localhost:5173", "https://cookhub.your-domain.com"));
+
+       config.setAllowedMethods(java.util.List.of("GET","POST","PUT","DELETE","OPTIONS"));
+       // 커스텀 요청 헤더 포함
+       config.setAllowedHeaders(java.util.List.of("Content-Type","Authorization","X-Signup-Token"));
+       // 쿠키/자격증명 사용 시 true (쿠키 기반 RT를 쓴다면 켜세요)
+       config.setAllowCredentials(true);
+       // 프리플라이트 캐시
+       config.setMaxAge(3600L);
+
+       var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+       source.registerCorsConfiguration("/**", config);
+       return source;
+   }
+    
     //비밀번호 Encoder 선언
     @Bean
     public BCryptPasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }

@@ -26,7 +26,7 @@ public class RecipeController {
     @Operation(summary = "레시피 전체 조회")
 	@GetMapping
 	public MainResponse list(@RequestParam(name = "page", defaultValue = "1") int page,
-							 @RequestParam(name = "size", defaultValue = "10") int size,
+							 @RequestParam(name = "size", defaultValue = "11") int size,
 							 @RequestParam(name = "categoryNo", required = false) Integer categoryNo,
 							 @RequestParam(name = "keyword", required = false) String keyword,
 							 @AuthenticationPrincipal AuthUser me){
